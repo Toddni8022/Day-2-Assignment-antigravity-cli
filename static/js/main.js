@@ -14,6 +14,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const emptyState = document.getElementById("emptyState");
     const releaseNotesFeed = document.getElementById("releaseNotesFeed");
     const retryBtn = document.getElementById("retryBtn");
+    const themeToggle = document.getElementById("themeToggle");
+    const exportCsvBtn = document.getElementById("exportCsvBtn");
     
     // Composer Elements
     const tweetTextArea = document.getElementById("tweetTextArea");
@@ -47,12 +49,42 @@ document.addEventListener("DOMContentLoaded", () => {
         charProgressRing.style.strokeDashoffset = ringCircumference;
     }
 
+    // Initialize Theme from localStorage
+    const savedTheme = localStorage.getItem("theme") || "dark";
+    if (savedTheme === "light") {
+        document.body.classList.add("light-theme");
+        if (themeToggle) themeToggle.checked = true;
+    } else {
+        document.body.classList.remove("light-theme");
+        if (themeToggle) themeToggle.checked = false;
+    }
+
     // Load initial feed data
     fetchReleaseNotes(false);
 
     // Event Listeners
     refreshBtn.addEventListener("click", () => fetchReleaseNotes(true));
     retryBtn.addEventListener("click", () => fetchReleaseNotes(true));
+
+    // Theme Toggle Listener
+    if (themeToggle) {
+        themeToggle.addEventListener("change", () => {
+            if (themeToggle.checked) {
+                document.body.classList.add("light-theme");
+                localStorage.setItem("theme", "light");
+            } else {
+                document.body.classList.remove("light-theme");
+                localStorage.setItem("theme", "dark");
+            }
+        });
+    }
+
+    // Export CSV Listener
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener("click", () => {
+            exportFeedToCSV();
+        });
+    }
     
     // Search input
     searchInput.addEventListener("input", (e) => {
@@ -290,9 +322,26 @@ document.addEventListener("DOMContentLoaded", () => {
                 bodyHtml.innerHTML = update.html;
                 contentSection.appendChild(bodyHtml);
 
-                // Quick actions (Quick Tweet)
+                // Quick actions
                 const actionsWrapper = document.createElement("div");
                 actionsWrapper.className = "card-actions-wrapper";
+
+                // Copy card content button
+                const copyBtn = document.createElement("button");
+                copyBtn.className = "card-action-btn copy-card-btn";
+                copyBtn.innerHTML = '<i class="fa-regular fa-copy"></i> Copy Update';
+                copyBtn.title = "Copy this update to clipboard";
+                
+                copyBtn.addEventListener("click", (e) => {
+                    e.stopPropagation(); // Avoid triggering card-click
+                    const tag = `[BigQuery ${update.type}]`;
+                    const dateShort = entry.date.replace(/, \d{4}/, '');
+                    const textToCopy = `${tag} (${dateShort}):\n${update.plain_text}\n\nRead more: ${entry.link}`;
+                    
+                    navigator.clipboard.writeText(textToCopy)
+                        .then(() => showToast("<i class='fa-regular fa-circle-check'></i> Copied update to clipboard!"))
+                        .catch(() => showToast("<i class='fa-regular fa-circle-xmark'></i> Failed to copy."));
+                });
 
                 const quickTweet = document.createElement("button");
                 quickTweet.className = `quick-tweet-btn ${isSelected ? 'added' : ''}`;
@@ -305,6 +354,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     toggleUpdateSelection(update, entry.date, entry.link, card);
                 });
                 
+                actionsWrapper.appendChild(copyBtn);
                 actionsWrapper.appendChild(quickTweet);
                 contentSection.appendChild(actionsWrapper);
 
@@ -476,5 +526,55 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => {
             toast.classList.remove("show");
         }, 3000);
+    }
+
+    function exportFeedToCSV() {
+        if (!allReleaseNotes || allReleaseNotes.length === 0) {
+            showToast("<i class='fa-solid fa-triangle-exclamation'></i> No data to export.");
+            return;
+        }
+
+        const rows = [["Date", "Type", "Description", "Link"]];
+        let exportCount = 0;
+
+        allReleaseNotes.forEach(entry => {
+            const filteredUpdates = entry.updates.filter(update => {
+                if (currentFilter !== "all" && update.type.toLowerCase() !== currentFilter.toLowerCase()) return false;
+                if (currentSearch) {
+                    const textContent = (update.type + " " + update.plain_text).toLowerCase();
+                    if (!textContent.includes(currentSearch)) return false;
+                }
+                return true;
+            });
+
+            filteredUpdates.forEach(update => {
+                rows.push([
+                    entry.date,
+                    update.type,
+                    update.plain_text,
+                    entry.link
+                ]);
+                exportCount++;
+            });
+        });
+
+        if (exportCount === 0) {
+            showToast("<i class='fa-solid fa-triangle-exclamation'></i> No matching updates to export.");
+            return;
+        }
+
+        // Convert rows to CSV format
+        const csvContent = rows.map(e => e.map(val => `"${val.replace(/"/g, '""')}"`).join(",")).join("\n");
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `bigquery_release_notes_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast(`<i class='fa-solid fa-file-csv'></i> Exported ${exportCount} updates to CSV!`);
     }
 });
