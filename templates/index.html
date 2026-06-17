@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigQuery Release Pulse</title>
+    
+    <!-- Meta tags for SEO & sharing -->
+    <meta name="description" content="A premium tracker for Google Cloud BigQuery release notes. Easily view, filter, search, and tweet about updates.">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-logo-section">
+                <div class="logo-wrapper">
+                    <i class="fa-solid fa-fire-flame-curved logo-icon"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>BigQuery Release Pulse</h1>
+                    <span class="logo-subtext">Google Cloud Release Tracker</span>
+                </div>
+            </div>
+            
+            <div class="header-controls">
+                <div class="status-indicator">
+                    <span class="status-dot green" id="statusDot"></span>
+                    <span class="status-text" id="statusText">Feed Connected</span>
+                </div>
+                <button id="refreshBtn" class="btn btn-primary" title="Refresh Release Notes">
+                    <i class="fa-solid fa-arrows-rotate btn-icon" id="refreshIcon"></i>
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <div class="main-layout">
+            <!-- Left Side: Release Notes and Filters -->
+            <main class="feed-section">
+                <!-- Search & Filtering Bar -->
+                <div class="controls-panel">
+                    <div class="search-box-wrapper">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" id="searchInput" placeholder="Search updates (e.g. Gemini, partition, table)..." autocomplete="off">
+                        <button id="clearSearchBtn" class="clear-search-btn" style="display: none;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="filter-group">
+                        <span class="filter-label">Filter by:</span>
+                        <div class="filter-chips" id="filterChips">
+                            <button class="chip active" data-type="all">All</button>
+                            <button class="chip" data-type="Feature">Features</button>
+                            <button class="chip" data-type="Announcement">Announcements</button>
+                            <button class="chip" data-type="Issue">Issues</button>
+                            <button class="chip" data-type="Deprecated">Deprecated</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feed Container -->
+                <div class="feed-container">
+                    <!-- Loading State -->
+                    <div id="loadingState" class="feed-state-card">
+                        <div class="spinner-wrapper">
+                            <div class="double-bounce1"></div>
+                            <div class="double-bounce2"></div>
+                        </div>
+                        <h3>Fetching Release Notes</h3>
+                        <p>Connecting to Google Cloud docs feed...</p>
+                    </div>
+
+                    <!-- Error State -->
+                    <div id="errorState" class="feed-state-card error-state" style="display: none;">
+                        <i class="fa-solid fa-triangle-exclamation error-icon"></i>
+                        <h3>Unable to Load Feed</h3>
+                        <p id="errorMessage">Please check your internet connection or try again later.</p>
+                        <button id="retryBtn" class="btn btn-secondary mt-3">
+                            <i class="fa-solid fa-arrows-rotate"></i> Retry
+                        </button>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="emptyState" class="feed-state-card" style="display: none;">
+                        <i class="fa-solid fa-box-open empty-icon"></i>
+                        <h3>No Release Notes Found</h3>
+                        <p>No updates match your search queries or active filters.</p>
+                    </div>
+
+                    <!-- Release Notes List -->
+                    <div id="releaseNotesFeed" class="release-notes-feed" style="display: none;">
+                        <!-- Dynamically populated via JS -->
+                    </div>
+                </div>
+            </main>
+
+            <!-- Right Side: Tweet Composer (Sticky) -->
+            <aside class="composer-section">
+                <div class="composer-card">
+                    <div class="composer-header">
+                        <h2><i class="fa-brands fa-x-twitter header-x-icon"></i> Tweet Composer</h2>
+                        <span class="composer-badge" id="selectedCountBadge">0 Selected</span>
+                    </div>
+                    
+                    <div class="composer-body">
+                        <p class="composer-instruction">
+                            Select updates from the feed using the checkboxes to build your tweet, or type directly below.
+                        </p>
+                        
+                        <div class="tweet-textarea-wrapper">
+                            <textarea id="tweetTextArea" placeholder="Share a BigQuery update..." maxlength="280"></textarea>
+                            <div class="tweet-preview-placeholder" id="tweetPlaceholder">
+                                <i class="fa-regular fa-comment-dots"></i> Your draft tweet will appear here as you select updates...
+                            </div>
+                        </div>
+
+                        <div class="composer-actions">
+                            <div class="char-counter-container">
+                                <svg class="progress-ring" width="36" height="36">
+                                    <circle class="progress-ring__circle-bg" stroke="#222E4A" stroke-width="3" fill="transparent" r="15" cx="18" cy="18"/>
+                                    <circle class="progress-ring__circle" id="charProgressRing" stroke="#38BDF8" stroke-width="3" fill="transparent" r="15" cx="18" cy="18"/>
+                                </svg>
+                                <span class="char-count-text" id="charCountLabel">280</span>
+                            </div>
+                            
+                            <div class="action-buttons">
+                                <button id="copyTweetBtn" class="btn btn-secondary" title="Copy text to clipboard" disabled>
+                                    <i class="fa-regular fa-copy"></i>
+                                </button>
+                                <button id="clearComposerBtn" class="btn btn-secondary" title="Clear Draft" disabled>
+                                    <i class="fa-regular fa-trash-can"></i>
+                                </button>
+                                <button id="tweetBtn" class="btn btn-tweet" disabled>
+                                    <i class="fa-brands fa-x-twitter"></i> Post
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Notification Toast -->
+        <div id="toast" class="toast">
+            <span class="toast-message" id="toastMessage">Copied to clipboard!</span>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>&copy; 2026 BigQuery Release Pulse. Designed for Google Cloud professionals.</p>
+        </footer>
+    </div>
+
+    <!-- Main JavaScript -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
